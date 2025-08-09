@@ -17,9 +17,10 @@ DATA_FILE = Path("weather_data.csv")
 
 @st.cache_data
 def load_data():
-    """Load weather data from CSV and convert timestamp column to datetime."""
-    # This function now requires the pytz library.
-    # You may need to run: pip install pytz
+    """
+    Load weather data from CSV and convert timestamp column to datetime.
+    This function is cached, but a button can force a rerun to refresh data.
+    """
     if DATA_FILE.exists():
         df = pd.read_csv(DATA_FILE)
         # Convert Unix timestamp to datetime objects
@@ -32,6 +33,11 @@ def load_data():
 # --- Main Application ---
 st.title("Hourly Weather Dashboard for African Cities")
 st.markdown("This dashboard visualizes the latest hourly temperature and humidity data for Cape Town, Kigali, and Kampala.")
+
+# 🎯 Add a button to force a data refresh
+if st.button('Refresh Data'):
+    st.cache_data.clear()
+    st.rerun() # 🎯 Changed from st.experimental_rerun() to st.rerun()
 
 data_df = load_data()
 
@@ -60,7 +66,6 @@ else:
 
     cities = ['Cape Town', 'Kigali', 'Kampala']
     
-    # 🎯 Add the checkbox for toggling line interpolation
     smooth_lines = st.checkbox('Smooth lines (monotone)', value=True)
     interpolation_type = 'monotone' if smooth_lines else 'linear'
 
@@ -79,7 +84,6 @@ else:
     else:
         chart_data = display_df[display_df['city'] == selected_city_temp]
 
-    # 🎯 Updated Altair chart to use the interpolation_type variable
     temp_chart = alt.Chart(chart_data).mark_line(
         interpolate=interpolation_type,
         point=False
@@ -102,8 +106,6 @@ else:
     st.header("Humidity Trends (%)")
     st.write("A chart showing humidity trends across all three cities.")
     
-    # Also use the display_df for the humidity chart
-    # 🎯 Updated Altair chart to use the interpolation_type variable
     humidity_chart = alt.Chart(display_df).mark_line(
         interpolate=interpolation_type
     ).encode(
