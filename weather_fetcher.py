@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
+import statistics
 
 load_dotenv()
 
@@ -45,14 +46,50 @@ def get_city_coordinates(city_name, country_code):
         response.raise_for_status()  # Raise an exception for bad status codes
         data = response.json()
         if data:
-            return data[0]["lat"], data[0]["lon"]
             print(f"Coordinates for {city_name}: {data[0]['lat']}, {data[0]['lon']}")
+            return data[0]["lat"], data[0]["lon"]
         else:
             print(f"Error: Could not find coordinates for {city_name}")
             return None, None
     except requests.exceptions.RequestException as e:
         print(f"Error fetching coordinates for {city_name}: {e}")
         return None, None
+
+def fetch_stable_weather_data(lat, lon, timestamp, attempts=3):
+    """
+    Fetches weather data multiple times and returns the median value for stability.
+    """
+    temperatures = []
+    humidities = []
+    
+    print(f"  > Performing {attempts} checks for a stable reading...")
+    for i in range(attempts):
+        weather_data = fetch_hourly_weather_data(lat, lon, timestamp)
+        if weather_data and "data" in weather_data and weather_data["data"]:
+            record = weather_data["data"][0]
+            temperatures.append(record["temp"])
+            humidities.append(record["humidity"])
+        
+        # Small delay between API calls
+        if i < attempts - 1:
+            time.sleep(0.5)
+
+    if not temperatures or not humidities:
+        return None # Return None if we failed to get any valid data
+
+    # Calculate the median value from the collected lists
+    stable_temp = statistics.median(temperatures)
+    stable_humidity = statistics.median(humidities)
+
+    print(f"  > Raw Temps: {temperatures}, Stable: {stable_temp}")
+    print(f"  > Raw Humidities: {humidities}, Stable: {stable_humidity}")
+
+    # Return a dictionary in the same format as your original record
+    return {
+        "timestamp": timestamp,
+        "temperature": stable_temp,
+        "humidity": stable_humidity,
+    }
 
 def fetch_hourly_weather_data(lat, lon, timestamp):
     """
@@ -87,23 +124,73 @@ def fetch_hourly_weather_data(lat, lon, timestamp):
         return None
 
 
-# lat = "-33.9288301"
-# lon = "18.4172197"
+def main_history():
+    if not API_KEY:
+        print("Error: OPENWEATHER_API_KEY environment variable not set.")
+        return
 
-# current_time = int(time.time())
-# previous_hour_timestamp = current_time - (current_time % 3600) - 3600
+    # Get the current time rounded to the start of the current hour
+    current_time = int(time.time())
+    start_of_current_hour = current_time - (current_time % 3600)
 
-# weather_data = fetch_hourly_weather_data(lat, lon, previous_hour_timestamp)
+    all_weather_data = []
 
-# if weather_data:
-#     print(weather_data)
+    # Loop through each of the past 48 hours
+    print("Starting to fetch data for the past 48 hours...")
+    for hour_ago in range(7, 49):  # This will loop from 1 to 48
+        # Calculate the Unix timestamp for the target hour
+        target_timestamp = start_of_current_hour - (hour_ago * 3600)
+        
+        # Convert to a readable format for logging
+        readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(target_timestamp))
+        print(f"\n--- Fetching data for hour: {readable_time} ({hour_ago} hours ago) ---")
+
+        # Loop through each city for that specific hour
+        for city_name, city_info in CITIES.items():
+            print(f"Fetching for {city_name}...")
+            lat, lon = get_city_coordinates(city_name, city_info["country_code"])
+
+            if lat is not None and lon is not None:
+                # v-- The only change is here --v
+                stable_record = fetch_stable_weather_data(lat, lon, target_timestamp)
+
+                if stable_record:
+                    all_weather_data.append({
+                        "timestamp": stable_record["timestamp"],
+                        "city": city_name,
+                        "temperature": stable_record["temperature"],
+                        "humidity": stable_record["humidity"],
+                    })
+                    print(f"  > Success: Got stable data for {city_name}.")
+                else:
+                    print(f"  > Failure: Could not retrieve a stable reading for {city_name}.")
+                # ^-- The only change is here --^
+            
+            # Respect API rate limits
+            time.sleep(1) 
+
+    if not all_weather_data:
+        print("\nNo weather data was fetched in the last 48 hours.")
+        return
+
+    # Create a DataFrame and append all collected data to the CSV at once
+    print(f"\nCollected a total of {len(all_weather_data)} records.")
+    new_data_df = pd.DataFrame(all_weather_data)
+
+    if DATA_FILE.exists():
+        new_data_df.to_csv(DATA_FILE, mode='a', header=False, index=False)
+        print(f"Appended new records to {DATA_FILE}")
+    else:
+        new_data_df.to_csv(DATA_FILE, mode='w', header=True, index=False)
+        print(f"Created {DATA_FILE} and wrote new records.")
+
+
 
 def main():
     if not API_KEY:
         print("Error: OPENWEATHER_API_KEY environment variable not set.")
         return
 
-    # Calculate the Unix timestamp for the start of the previous hour
     current_time = int(time.time())
     previous_hour_timestamp = current_time - (current_time % 3600) - 3600
 
@@ -114,96 +201,36 @@ def main():
         lat, lon = get_city_coordinates(city_name, city_info["country_code"])
 
         if lat is not None and lon is not None:
-            weather_data = fetch_hourly_weather_data(lat, lon, previous_hour_timestamp)
+            stable_record = fetch_stable_weather_data(lat, lon, previous_hour_timestamp)
 
-            if weather_data and "data" in weather_data and weather_data["data"]:
-                record = weather_data["data"][0]
-                all_weather_data.append({
-                    "timestamp": record["dt"],
-                    "city": city_name,
-                    "temperature": record["temp"],
-                    "humidity": record["humidity"],
-                })
-                print(f"Successfully fetched data for {city_name}.")
-            else:
-                print(f"Could not retrieve weather data for {city_name}.")
+        if stable_record:
+            # Append the stable data to your list
+            all_weather_data.append({
+                "timestamp": stable_record["timestamp"],
+                "city": city_name,
+                "temperature": stable_record["temperature"],
+                "humidity": stable_record["humidity"],
+            })
+            print(f"Successfully fetched stable data for {city_name}.")
+        else:
+            print(f"Could not retrieve a stable reading for {city_name}.")
+        
+        # A longer sleep here since each city now involves multiple API calls
+        time.sleep(1) 
 
-        time.sleep(1)
-
+    # --- The rest of the main function (writing to CSV) remains exactly the same ---
     if not all_weather_data:
         print("No weather data was fetched.")
         return
 
-    # Create a DataFrame and append to CSV
     new_data_df = pd.DataFrame(all_weather_data)
 
     if DATA_FILE.exists():
-        # Append without header
         new_data_df.to_csv(DATA_FILE, mode='a', header=False, index=False)
         print(f"Appended {len(all_weather_data)} new records to {DATA_FILE}")
     else:
-        # Create new file with header
         new_data_df.to_csv(DATA_FILE, mode='w', header=True, index=False)
         print(f"Created {DATA_FILE} and wrote {len(all_weather_data)} new records.")
-
-# def main_history():
-#     if not API_KEY:
-#         print("Error: OPENWEATHER_API_KEY environment variable not set.")
-#         return
-
-#     # Get the current time rounded to the start of the current hour
-#     current_time = int(time.time())
-#     start_of_current_hour = current_time - (current_time % 3600)
-
-#     all_weather_data = []
-
-#     # Loop through each of the past 48 hours
-#     print("Starting to fetch data for the past 48 hours...")
-#     for hour_ago in range(1, 49):  # This will loop from 1 to 48
-#         # Calculate the Unix timestamp for the target hour
-#         target_timestamp = start_of_current_hour - (hour_ago * 3600)
-        
-#         # Convert to a readable format for logging
-#         readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(target_timestamp))
-#         print(f"\n--- Fetching data for hour: {readable_time} ({hour_ago} hours ago) ---")
-
-#         # Loop through each city for that specific hour
-#         for city_name, city_info in CITIES.items():
-#             print(f"Fetching for {city_name}...")
-#             lat, lon = get_city_coordinates(city_name, city_info["country_code"])
-
-#             if lat is not None and lon is not None:
-#                 weather_data = fetch_hourly_weather_data(lat, lon, target_timestamp)
-
-#                 if weather_data and "data" in weather_data and weather_data["data"]:
-#                     record = weather_data["data"][0]
-#                     all_weather_data.append({
-#                         "timestamp": record["dt"],
-#                         "city": city_name,
-#                         "temperature": record["temp"],
-#                         "humidity": record["humidity"],
-#                     })
-#                     print(f"  > Success for {city_name}.")
-#                 else:
-#                     print(f"  > Could not retrieve weather data for {city_name}.")
-            
-#             # Respect API rate limits
-#             time.sleep(1) 
-
-#     if not all_weather_data:
-#         print("\nNo weather data was fetched in the last 48 hours.")
-#         return
-
-#     # Create a DataFrame and append all collected data to the CSV at once
-#     print(f"\nCollected a total of {len(all_weather_data)} records.")
-#     new_data_df = pd.DataFrame(all_weather_data)
-
-#     if DATA_FILE.exists():
-#         new_data_df.to_csv(DATA_FILE, mode='a', header=False, index=False)
-#         print(f"Appended new records to {DATA_FILE}")
-#     else:
-#         new_data_df.to_csv(DATA_FILE, mode='w', header=True, index=False)
-#         print(f"Created {DATA_FILE} and wrote new records.")
 
 if __name__ == "__main__":
     # main_history()
