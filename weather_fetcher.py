@@ -137,7 +137,7 @@ def main_history():
 
     # Loop through each of the past 48 hours
     print("Starting to fetch data for the past 48 hours...")
-    for hour_ago in range(7, 49):  # This will loop from 1 to 48
+    for hour_ago in range(24, 0, -1):  # This will loop from 1 to 48
         # Calculate the Unix timestamp for the target hour
         target_timestamp = start_of_current_hour - (hour_ago * 3600)
         
@@ -184,8 +184,6 @@ def main_history():
         new_data_df.to_csv(DATA_FILE, mode='w', header=True, index=False)
         print(f"Created {DATA_FILE} and wrote new records.")
 
-
-
 def main():
     if not API_KEY:
         print("Error: OPENWEATHER_API_KEY environment variable not set.")
@@ -193,6 +191,10 @@ def main():
 
     current_time = int(time.time())
     previous_hour_timestamp = current_time - (current_time % 3600) - 3600
+
+    # format the timestamp to a readable format
+    readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(previous_hour_timestamp))
+    print(f"Fetching data for {readable_time}...")
 
     all_weather_data = []
 
