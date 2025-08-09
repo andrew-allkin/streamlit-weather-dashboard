@@ -4,8 +4,11 @@ import requests
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
 
-API_KEY = "90ef9cf2a391a51ddd18bb2d3dc2f416"
+load_dotenv()
+
+API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 
 GEOCODING_API_URL = "http://api.openweathermap.org/geo/1.0/direct"
 TIMEMACHINE_API_URL = "https://api.openweathermap.org/data/3.0/onecall/timemachine"
