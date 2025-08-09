@@ -29,12 +29,15 @@ jobs:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: python weather_fetcher.py
 
-      # This single step replaces the complex shell script
       - name: Commit and push if data changed
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          # The commit message for the update
-          commit_message: "Update hourly weather data"
-          
-          # The specific file to watch for changes
-          file_pattern: weather_data.csv
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add weather_data.csv
+          # Commit only if there are changes
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Update hourly weather data"
+            git push
+          else
+            echo "No changes to commit."
+          fi
