@@ -24,17 +24,21 @@ CITIES = {
 
 def get_city_coordinates(city_name, country_code):
     """
-    Get the latitude and longitude of a city using the OpenWeatherMap API.
-
+    Fetch geographical coordinates (latitude and longitude) for a given city.
+    
+    Uses the OpenWeatherMap Geocoding API to convert city name and country code
+    into precise coordinates required for weather data retrieval.
+    
     Args:
-        city_name (str): The name of the city.
-        country_code (str): The code of the country.
-
+        city_name (str): Name of the city to get coordinates for
+        country_code (str): ISO 3166 country code (e.g., 'ZA' for South Africa)
+    
     Returns:
-        tuple: A tuple containing the latitude and longitude of the city.
-
+        tuple: A tuple containing (latitude, longitude) as floats, or (None, None)
+               if coordinates could not be retrieved
+    
     Raises:
-        requests.exceptions.RequestException: If the request to the OpenWeatherMap API fails.
+        requests.exceptions.RequestException: If there's an error with the API request
     """
     params = {
         "q": f"{city_name},{country_code}",
@@ -57,7 +61,24 @@ def get_city_coordinates(city_name, country_code):
 
 def fetch_stable_weather_data(lat, lon, timestamp, attempts=3):
     """
-    Fetches weather data multiple times and returns the median value for stability.
+    Fetch weather data multiple times and return median values for stability.
+    
+    This function performs multiple API calls to get consistent weather readings
+    by fetching data several times and calculating the median temperature and
+    humidity to reduce variability in the data.
+    
+    Args:
+        lat (float): Latitude coordinate for the location
+        lon (float): Longitude coordinate for the location
+        timestamp (int): Unix timestamp for the specific hour to fetch data
+        attempts (int, optional): Number of API calls to make for stability. Defaults to 3.
+    
+    Returns:
+        dict or None: Dictionary containing stable weather data with keys:
+                     - 'timestamp': Unix timestamp
+                     - 'temperature': Median temperature in Celsius
+                     - 'humidity': Median humidity percentage
+                     Returns None if no valid data could be retrieved.
     """
     temperatures = []
     humidities = []
@@ -93,18 +114,22 @@ def fetch_stable_weather_data(lat, lon, timestamp, attempts=3):
 
 def fetch_hourly_weather_data(lat, lon, timestamp):
     """
-    Fetch hourly weather data for a given latitude, longitude, and timestamp.
-
+    Fetch historical weather data for a specific location and time.
+    
+    Makes a single API call to OpenWeatherMap's Time Machine API to retrieve
+    historical weather data for a specific hour at given coordinates.
+    
     Args:
-        lat (str): The latitude of the location.
-        lon (str): The longitude of the location.
-        timestamp (int): The timestamp in seconds since the Unix epoch.
-
+        lat (float): Latitude coordinate for the location
+        lon (float): Longitude coordinate for the location
+        timestamp (int): Unix timestamp for the specific hour to fetch data
+    
     Returns:
-        dict: The weather data for the given latitude, longitude, and timestamp.
-
+        dict or None: JSON response from the API containing weather data,
+                     or None if the request fails
+    
     Raises:
-        requests.exceptions.RequestException: If the request to the OpenWeatherMap API fails.
+        requests.exceptions.RequestException: If there's an error with the API request
     """
     params = {
         "lat": lat,
@@ -123,68 +148,34 @@ def fetch_hourly_weather_data(lat, lon, timestamp):
         print(f"Error fetching weather data for lat={lat}, lon={lon}: {e}")
         return None
 
-
-def main_history():
-    if not API_KEY:
-        print("Error: OPENWEATHER_API_KEY environment variable not set.")
-        return
-
-    # Get the current time rounded to the start of the current hour
-    current_time = int(time.time())
-    start_of_current_hour = current_time - (current_time % 3600)
-
-    all_weather_data = []
-
-    # Loop through each of the past 48 hours
-    print("Starting to fetch data for the past 48 hours...")
-    for hour_ago in range(24, 0, -1):  # This will loop from 1 to 48
-        # Calculate the Unix timestamp for the target hour
-        target_timestamp = start_of_current_hour - (hour_ago * 3600)
-        
-        # Convert to a readable format for logging
-        readable_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(target_timestamp))
-        print(f"\n--- Fetching data for hour: {readable_time} ({hour_ago} hours ago) ---")
-
-        # Loop through each city for that specific hour
-        for city_name, city_info in CITIES.items():
-            print(f"Fetching for {city_name}...")
-            lat, lon = get_city_coordinates(city_name, city_info["country_code"])
-
-            if lat is not None and lon is not None:
-                # v-- The only change is here --v
-                stable_record = fetch_stable_weather_data(lat, lon, target_timestamp)
-
-                if stable_record:
-                    all_weather_data.append({
-                        "timestamp": stable_record["timestamp"],
-                        "city": city_name,
-                        "temperature": stable_record["temperature"],
-                        "humidity": stable_record["humidity"],
-                    })
-                    print(f"  > Success: Got stable data for {city_name}.")
-                else:
-                    print(f"  > Failure: Could not retrieve a stable reading for {city_name}.")
-                # ^-- The only change is here --^
-            
-            # Respect API rate limits
-            time.sleep(1) 
-
-    if not all_weather_data:
-        print("\nNo weather data was fetched in the last 48 hours.")
-        return
-
-    # Create a DataFrame and append all collected data to the CSV at once
-    print(f"\nCollected a total of {len(all_weather_data)} records.")
-    new_data_df = pd.DataFrame(all_weather_data)
-
-    if DATA_FILE.exists():
-        new_data_df.to_csv(DATA_FILE, mode='a', header=False, index=False)
-        print(f"Appended new records to {DATA_FILE}")
-    else:
-        new_data_df.to_csv(DATA_FILE, mode='w', header=True, index=False)
-        print(f"Created {DATA_FILE} and wrote new records.")
-
 def main():
+    """
+    Main function to fetch and store weather data for multiple cities.
+    
+    This function orchestrates the entire weather data collection process:
+    1. Validates that the API key is configured
+    2. Calculates the timestamp for the previous complete hour
+    3. Iterates through predefined cities to fetch their coordinates
+    4. Retrieves stable weather data for each city
+    5. Saves all collected data to a CSV file
+    
+    The function fetches weather data for the previous hour to ensure
+    complete data availability. It handles both creating a new CSV file
+    and appending to an existing one.
+    
+    Global Variables Used:
+        API_KEY (str): OpenWeatherMap API key from environment variables
+        CITIES (dict): Dictionary of cities with their country codes
+        DATA_FILE (Path): Path to the CSV file for storing weather data
+    
+    Side Effects:
+        - Prints progress messages to console
+        - Creates or appends to weather_data.csv file
+        - Makes multiple API calls with rate limiting delays
+    
+    Raises:
+        SystemExit: Implicitly exits if API_KEY is not configured
+    """
     if not API_KEY:
         print("Error: OPENWEATHER_API_KEY environment variable not set.")
         return
@@ -235,5 +226,4 @@ def main():
         print(f"Created {DATA_FILE} and wrote {len(all_weather_data)} new records.")
 
 if __name__ == "__main__":
-    # main_history()
     main()
