@@ -162,16 +162,6 @@ def main():
     complete data availability. It handles both creating a new CSV file
     and appending to an existing one.
     
-    Global Variables Used:
-        API_KEY (str): OpenWeatherMap API key from environment variables
-        CITIES (dict): Dictionary of cities with their country codes
-        DATA_FILE (Path): Path to the CSV file for storing weather data
-    
-    Side Effects:
-        - Prints progress messages to console
-        - Creates or appends to weather_data.csv file
-        - Makes multiple API calls with rate limiting delays
-    
     Raises:
         SystemExit: Implicitly exits if API_KEY is not configured
     """
