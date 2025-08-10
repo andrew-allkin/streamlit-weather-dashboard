@@ -1,18 +1,15 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import pytz  # Import pytz for timezone handling
+import pytz
 from pathlib import Path
 
-# --- Page Configuration ---
 st.set_page_config(
     page_title="African Cities Weather Dashboard",
     page_icon="🌤️",
     layout="wide"
 )
 
-# --- Data Loading and Caching ---
-# Note: The data is assumed to be in UTC in the CSV file.
 DATA_FILE = Path("weather_data.csv")
 
 @st.cache_data
@@ -23,32 +20,26 @@ def load_data():
     """
     if DATA_FILE.exists():
         df = pd.read_csv(DATA_FILE)
-        # Convert Unix timestamp to datetime objects
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-        # 1. Make timestamp column timezone-aware (localize to UTC)
         df['timestamp'] = df['timestamp'].dt.tz_localize('UTC')
         return df
     return pd.DataFrame()
 
-# --- Main Application ---
 st.title("Hourly Weather Dashboard for African Cities")
-st.markdown("This dashboard visualizes the latest hourly temperature and humidity data for Cape Town, Kigali, and Kampala.")
+st.markdown("This dashboard visualizes the latest hourly temperature and humidity data for Cape Town, Kigali, and Kampala. The data is updated every hour.")
 
-# 🎯 Add a button to force a data refresh
 if st.button('Refresh Data'):
     st.cache_data.clear()
-    st.rerun() # 🎯 Changed from st.experimental_rerun() to st.rerun()
+    st.rerun()
 
 data_df = load_data()
 
 if data_df.empty:
     st.warning("No weather data available. Make sure `weather_data.csv` is in the repository and the fetching script has run.")
 else:
-    # Add a 'country' column for the tooltip based on the city
     country_map = {'Cape Town': 'South Africa', 'Kigali': 'Rwanda', 'Kampala': 'Uganda'}
     data_df['country'] = data_df['city'].map(country_map)
 
-    # --- Timezone Toggle and Conversion ---
     use_sast = st.toggle('Display time in SAST (UTC+2)', value=True)
     
     display_df = data_df.copy()
@@ -69,8 +60,7 @@ else:
     smooth_lines = st.checkbox('Smooth lines (monotone)', value=True)
     interpolation_type = 'monotone' if smooth_lines else 'linear'
 
-    # --- Visualizations ---
-    st.header("Temperature Trends (°C)")
+    st.header("Temperature Chart")
     
     temp_selection_options = ['All'] + cities
     selected_city_temp = st.selectbox(
@@ -103,8 +93,8 @@ else:
 
     st.altair_chart(temp_chart, use_container_width=True)
 
-    st.header("Humidity Trends (%)")
-    st.write("A chart showing humidity trends across all three cities.")
+    st.header("Humidity Chart")
+    st.write("A chart showing humidity trends across Cape Town, Kigali, and Kampala.")
     
     humidity_chart = alt.Chart(display_df).mark_line(
         interpolate=interpolation_type
