@@ -57,7 +57,7 @@ else:
 
     cities = ['Cape Town', 'Kigali', 'Kampala']
     
-    smooth_lines = st.checkbox('Smooth lines (monotone)', value=True)
+    smooth_lines = st.checkbox('Smooth lines', value=True)
     interpolation_type = 'monotone' if smooth_lines else 'linear'
 
     st.header("Temperature Chart")
