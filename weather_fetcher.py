@@ -47,7 +47,7 @@ def get_city_coordinates(city_name, country_code):
     }
     try:
         response = requests.get(GEOCODING_API_URL, params=params)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        response.raise_for_status()
         data = response.json()
         if data:
             print(f"Coordinates for {city_name}: {data[0]['lat']}, {data[0]['lon']}")
@@ -96,7 +96,7 @@ def fetch_stable_weather_data(lat, lon, timestamp, attempts=3):
             time.sleep(0.5)
 
     if not temperatures or not humidities:
-        return None # Return None if we failed to get any valid data
+        return None
 
     # Calculate the median value from the collected lists
     stable_temp = statistics.median(temperatures)
@@ -105,7 +105,6 @@ def fetch_stable_weather_data(lat, lon, timestamp, attempts=3):
     print(f"  > Raw Temps: {temperatures}, Stable: {stable_temp}")
     print(f"  > Raw Humidities: {humidities}, Stable: {stable_humidity}")
 
-    # Return a dictionary in the same format as your original record
     return {
         "timestamp": timestamp,
         "temperature": stable_temp,
@@ -197,7 +196,6 @@ def main():
             stable_record = fetch_stable_weather_data(lat, lon, previous_hour_timestamp)
 
         if stable_record:
-            # Append the stable data to your list
             all_weather_data.append({
                 "timestamp": stable_record["timestamp"],
                 "city": city_name,
@@ -208,10 +206,8 @@ def main():
         else:
             print(f"Could not retrieve a stable reading for {city_name}.")
         
-        # A longer sleep here since each city now involves multiple API calls
         time.sleep(1) 
 
-    # --- The rest of the main function (writing to CSV) remains exactly the same ---
     if not all_weather_data:
         print("No weather data was fetched.")
         return
