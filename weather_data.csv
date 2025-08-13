@@ -320,3 +320,6 @@ timestamp,city,temperature,humidity
 1755072000,Cape Town,12.9,82
 1755072000,Kigali,20.87,64
 1755072000,Kampala,27.35,41
+1755075600,Cape Town,14.58,73
+1755075600,Kigali,21.98,56
+1755075600,Kampala,28.45,38
